@@ -47,10 +47,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    pointer-events: none; /* Desactiva captura de clics globales para no bloquear controles */
+    pointer-events: none;
   }
 
-  /* Habilitar interacción explícita solo en elementos interactivos */
   .stage * { pointer-events: none; }
 
   /* ---------- sky layers ---------- */
@@ -204,22 +203,22 @@
     position: fixed;
     right: max(18px, env(safe-area-inset-right));
     bottom: max(18px, env(safe-area-inset-bottom, 18px));
-    width: 56px; height: 56px; border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.25); 
-    background: rgba(30, 30, 50, 0.65);
+    width: 58px; height: 58px; border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.3); 
+    background: rgba(20, 20, 35, 0.85);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     display: flex; align-items: center; justify-content: center;
     cursor: pointer; 
-    z-index: 999; /* Garantiza prioridad máxima en la pila de renderizado */
-    opacity: 1; /* Mantener interactivo desde el inicio */
-    pointer-events: auto !important; /* Fuerza la recepción de clics y toques táctiles */
+    z-index: 9999;
+    pointer-events: auto !important;
     touch-action: manipulation;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
-    transition: transform 0.2s ease, background-color 0.2s ease;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    transition: transform 0.15s ease, border-color 0.2s ease;
   }
-  .music-btn:active{ transform: scale(0.90); }
-  .music-btn svg{ width: 24px; height: 24px; fill: #FFF3D6; pointer-events: none; }
+  .music-btn:active{ transform: scale(0.88); }
+  .music-btn.playing { border-color: var(--gold); }
+  .music-btn svg{ width: 26px; height: 26px; fill: #FFF3D6; pointer-events: none; }
 
   @media (prefers-reduced-motion: reduce){
     .envelope-wrap{ animation: none; }
@@ -292,20 +291,19 @@
   </div>
 </div>
 
-<!-- El botón se coloca fuera del stage para aislarlo completamente del hilo de animación -->
 <button class="music-btn" id="musicBtn" aria-label="Reproducir música">
   <svg id="musicIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
 </button>
 
 <div class="track"></div>
 
-<audio id="bgm" src="song.mp3" loop preload="auto"></audio>
+<audio id="bgm" src="song.mp3" loop preload="none"></audio>
 
 <script>
 (function(){
   "use strict";
 
-  /* ---------- Generación de Estrellas ---------- */
+  /* ---------- Estrellas ---------- */
   var starsEl = document.getElementById('stars');
   var fragmentStars = document.createDocumentFragment();
   for (var i = 0; i < 70; i++) {
@@ -321,7 +319,7 @@
   }
   starsEl.appendChild(fragmentStars);
 
-  /* ---------- Construcción de Ramo SVG ---------- */
+  /* ---------- Ramo SVG ---------- */
   var stemsGroup = document.getElementById('stemsGroup');
   var flowersGroup = document.getElementById('flowersGroup');
   var ribbonGroup = document.getElementById('ribbon');
@@ -400,7 +398,7 @@
     flowerRefs.push({ el: g, x: f.x, top: f.top, stem: stem, delay: f.delay, leaf: leafEl });
   });
 
-  /* ---------- Control de Animación por Scroll ---------- */
+  /* ---------- Scroll Controller ---------- */
   var envFlap = document.getElementById('envFlap');
   var envelopeWrap = document.getElementById('envelopeWrap');
   var letter = document.getElementById('letter');
@@ -480,45 +478,52 @@
   window.addEventListener('resize', onScroll);
   render();
 
-  /* ---------- Control de Audio Anti-Bloqueo ---------- */
+  /* ---------- Controlador de Audio por Interacción Directa ---------- */
   var bgm = document.getElementById('bgm');
   var musicBtn = document.getElementById('musicBtn');
   var musicIcon = document.getElementById('musicIcon');
-  var isPlaying = false;
 
   var PLAY_ICON = '<path d="M8 5v14l11-7z"/>';
   var PAUSE_ICON = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
 
-  function toggleAudio(e) {
-    if (e) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
+  function handlePlayToggle(e) {
+    if (e) e.preventDefault();
 
-    if (!isPlaying) {
-      var promise = bgm.play();
-      if (promise !== undefined) {
-        promise.then(function() {
-          isPlaying = true;
+    if (bgm.paused) {
+      // Forzamos la carga explicita al presionar el botón en dispositivos móviles
+      if (bgm.readyState === 0) {
+        bgm.load();
+      }
+
+      var playPromise = bgm.play();
+
+      if (playPromise !== undefined) {
+        playPromise.then(function() {
           musicIcon.innerHTML = PAUSE_ICON;
-        }).catch(function(error) {
-          console.warn("Retención de Autoplay activada:", error);
+          musicBtn.classList.add('playing');
+        }).catch(function(err) {
+          console.error("Error al iniciar reproducción en móvil:", err.name, err.message);
+          // Reintento forzado de recarga
           bgm.load();
           bgm.play().then(function() {
-            isPlaying = true;
             musicIcon.innerHTML = PAUSE_ICON;
+            musicBtn.classList.add('playing');
+          }).catch(function(finalErr) {
+            console.error("Fallo definitivo de reproducción:", finalErr);
+            alert("No se pudo cargar el audio. Por favor verifica que el archivo 'song.mp3' exista en el servidor.");
           });
         });
       }
     } else {
       bgm.pause();
-      isPlaying = false;
       musicIcon.innerHTML = PLAY_ICON;
+      musicBtn.classList.remove('playing');
     }
   }
 
-  // Escuchadores de eventos optimizados para móvil y escritorio
-  musicBtn.addEventListener('click', toggleAudio);
+  // Vincular el evento de clic de forma exclusiva
+  musicBtn.addEventListener('click', handlePlayToggle);
+
 })();
 </script>
 </body>
